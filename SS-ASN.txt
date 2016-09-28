@@ -1,0 +1,92 @@
+' This VBA takes sheets in different Workbooks and combines them all in different worksheets of one workbook.
+' Also it loops through all the sheets of new workbook and inserts pivot table in them.
+' Project: Statistics Summary Value Idea
+' Author: Nikunj Bajpai, Software Engineer
+' Team / Project: ZF-TRW Automotives, Global Integration Team
+' Organization: HCL Technologies
+
+
+
+' SubRoutine to Merge Files
+Sub ASNMerge(TargetPath As String)
+    Dim bookList As Workbook
+    Dim ws As Worksheet
+    Dim mergeObj As Object, dirObj As Object, filesObj As Object, everyObj As Object
+    Application.ScreenUpdating = False
+    Set mergeObj = CreateObject("Scripting.FileSystemObject")
+    ' change folder path of excel files here
+    Set dirObj = mergeObj.Getfolder(TargetPath)
+    Set filesObj = dirObj.Files
+    ' Loop throught all files in TargetPath
+    For Each everyObj In filesObj
+        Set bookList = Workbooks.Open(everyObj)
+        ' Adding a worksheet after cureent one
+        Set ws = Sheets.Add(After:=Sheets(Worksheets.Count))
+        ' Renaming Worksheet As Source Workbook Name
+        ws.Name = bookList.Name
+        ' Selecting Range of data to copy
+        Range("A1:IV" & Range("A65536").End(xlUp).Row).Copy
+        ws.Activate
+        ActiveSheet.Name = bookList.Name
+        Range("A65536").End(xlUp).Offset(0, 0).PasteSpecial
+        ActiveSheet.UsedRange.Columns.AutoFit
+        Application.CutCopyMode = False
+        bookList.Close
+    Next
+End Sub
+
+' SubRoutine to ApplyPivot
+Sub ApplyPivot(SheetName As String)
+    Dim wsTarget As Worksheet
+    Dim rngData As Range
+    Dim rngPivotTarget As Range
+    Dim objCache As PivotCache
+    Dim objTable As PivotTable
+    Dim objField As PivotField
+
+    On Error Resume Next
+    
+    ' Create pivot table in code (no wizard) on same sheet
+    Set wsTarget = ActiveWorkbook.Sheets(SheetName)
+    ' Set range to build table from
+    Set rngData = wsTarget.Range("A1").CurrentRegion
+    ' Set range for left-hand corner of pivot clear of source data by 1 column
+    ' Set rngPivotTarget = wsTarget.Cells(1, rngData.Columns.Count + 2)
+    Set rngPivotTarget = wsTarget.Cells(rngData.Rows.Count + 2, 1)
+    ' Create cache from data
+    Set objCache = ThisWorkbook.PivotCaches.Create(xlDatabase, rngData)
+    ' Create table from cache
+    Set objTable = objCache.CreatePivotTable(rngPivotTarget)
+
+    ' Pivot Rules
+    Set objField = objTable.PivotFields("Supplier")
+    objField.Orientation = xlRowField
+
+    Set objField = objTable.PivotFields("Imported")
+    objField.Orientation = xlColumnField
+
+    Set objField = objTable.PivotFields("Item")
+    objField.Orientation = xlDataField
+    objField.Function = xlCount
+    objField.NumberFormat = " ######"
+
+End Sub
+
+
+Sub MasterSub()
+    Dim ws As Worksheet
+    Dim TargetPath As String
+    Dim WS_Count As Integer
+    Dim I As Integer
+    TargetPath = InputBox("Please give absolute path for target folder:")
+    ' Call Merge Subroutine with TargetPath
+    ASNMerge TargetPath
+    WS_Count = ActiveWorkbook.Worksheets.Count
+    ' Begin the loop.
+    For I = 1 To WS_Count
+        Set ws = ThisWorkbook.Worksheets(I)
+        ' Call Pivot Subroutine With Worksheet name
+        ApplyPivot ActiveWorkbook.Worksheets(I).Name
+    Next I
+
+End Sub

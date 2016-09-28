@@ -1,0 +1,123 @@
+' This VBA takes sheets in different Workbooks and combines them all in different worksheets of one workbook.
+' Also it loops through all the sheets of new workbook and inserts pivot table in them.
+' Project: Statistics Summary Value Idea
+' Author: Nikunj Bajpai, Software Engineer
+' Team / Project: ZF-TRW Automotives, Global Integration Team
+' Organization: HCL Technologies
+
+
+
+' SubRoutine to Merge Files
+Sub ULSMerge(TargetPath As String)
+    Dim bookList As Workbook
+    Dim ws As Worksheet
+    Dim mergeObj As Object, dirObj As Object, filesObj As Object, everyObj As Object
+    Application.ScreenUpdating = False
+    Set mergeObj = CreateObject("Scripting.FileSystemObject")
+    ' change folder path of excel files here
+    Set dirObj = mergeObj.Getfolder(TargetPath)
+    Set filesObj = dirObj.Files
+    ' Loop throught all files in TargetPath
+    For Each everyObj In filesObj
+        Set bookList = Workbooks.Open(everyObj)
+        ' Adding a worksheet after cureent one
+        Set ws = Sheets.Add(After:=Sheets(Worksheets.Count))
+        ' Renaming Worksheet As Source Workbook Name
+        ws.Name = bookList.Name
+        ' Selecting Range of data to copy
+        Range("A1:IV" & Range("A65536").End(xlUp).Row).Copy
+        ws.Activate
+        ActiveSheet.Name = bookList.Name
+        Range("A65536").End(xlUp).Offset(0, 0).PasteSpecial
+        ActiveSheet.UsedRange.Columns.AutoFit
+        Application.CutCopyMode = False
+        bookList.Close
+    Next
+End Sub
+
+' This Subroutine Applies Date Filter on "Logged On"
+Sub ApplyFilterToColumn(columnName As String, ws As Worksheet, FilterDate1 As String, FilterDate2 As String)
+
+    Dim rng As Range
+    Dim cell As Range
+    Dim FilterCriteria1 As String
+    Dim FilterCriteria2 As String
+    
+    Set rng = ws.Range(ws.Range("A1"), ws.Range("A1").End(xlToRight))
+    
+    FilterCriteria1 = ">=" & FilterDate1
+    FilterCriteria2 = "<=" & FilterDate2
+    For Each cell In rng
+        If cell.Value = columnName Then
+
+            cell.AutoFilter cell.Column, Criteria1:=FilterCriteria1, Criteria2:=FilterCriteria2, Operator:=xlFilterValues
+
+        End If
+    Next cell
+
+End Sub
+
+' SubRoutine to ApplyPivot
+Sub ApplyPivot(SheetName As String)
+    Dim wsTarget As Worksheet
+    Dim rngData As Range
+    Dim rngPivotTarget As Range
+    Dim objCache As PivotCache
+    Dim objTable As PivotTable
+    Dim objField As PivotField
+
+    On Error Resume Next
+    
+    ' Create pivot table in code (no wizard) on same sheet
+    Set wsTarget = ActiveWorkbook.Sheets(SheetName)
+    ' Set range to build table from
+    Set rngData = wsTarget.Range("A1").CurrentRegion
+    ' Set range for left-hand corner of pivot clear of source data by 1 column
+    ' Set rngPivotTarget = wsTarget.Cells(1, rngData.Columns.Count + 2)
+    Set rngPivotTarget = wsTarget.Cells(rngData.Rows.Count + 2, 1)
+    ' Create cache from data
+    Set objCache = ThisWorkbook.PivotCaches.Create(xlDatabase, rngData)
+    ' Create table from cache
+    Set objTable = objCache.CreatePivotTable(rngPivotTarget)
+
+    ' Pivot Rules
+    Set objField = objTable.PivotFields("Supplier")
+    objField.Orientation = xlRowField
+
+    Set objField = objTable.PivotFields("Logged On")
+    objField.Orientation = xlDataField
+    objField.Function = xlCount
+    objField.NumberFormat = " ######"
+
+End Sub
+
+
+Sub MasterSub()
+    Dim ws As Worksheet
+    Dim TargetPath As String
+    Dim WS_Count As Integer
+    Dim I As Integer
+    Dim columnName As String
+    Dim FilterDate1 As String
+    Dim FilterDate2 As String
+    TargetPath = InputBox("Please give absolute path for target folder:")
+    FilterDate1 = InputBox("Give Start Date in format MM/DD/YYYY")
+    FilterDate2 = InputBox("Give End Date (Excluding) in format MM/DD/YYYY")
+    ' Call Merge Subroutine with TargetPath
+    ULSMerge TargetPath
+    columnName = "Logged On"
+    WS_Count = ActiveWorkbook.Worksheets.Count
+    ' Begin the loop.
+    For I = 1 To WS_Count
+        Set ws = ThisWorkbook.Worksheets(I)
+        ' Call Pivot Subroutine With Worksheet name
+        ApplyFilterToColumn columnName, ws, FilterDate1, FilterDate2
+        ActiveWindow.ScrollRow = 1
+        ActiveWindow.ScrollColumn = 1
+        ApplyPivot ActiveWorkbook.Worksheets(I).Name
+    Next I
+
+End Sub
+
+
+
